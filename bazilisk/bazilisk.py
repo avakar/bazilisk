@@ -11,7 +11,7 @@ def _find_workspace_dir(base):
             return cur
         cur, tail = os.path.split(cur)
         if tail == '':
-            RuntimeError('failed to find WORKSPACE')
+            raise RuntimeError('failed to find WORKSPACE')
 
 def _find_packages(wrk):
     for top, dirnames, filenames in os.walk(wrk):
