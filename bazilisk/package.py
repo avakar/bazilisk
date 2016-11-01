@@ -1,5 +1,5 @@
 import os
-from bzlfile import parse as parse_bzl
+from .bzlfile import parse as parse_bzl
 
 def parse_label(label, base=None):
     toks = label.split(':', 1)

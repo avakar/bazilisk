@@ -1,7 +1,7 @@
 import sys, argparse
-from bzlfile import parse as parse_bzl
-from package import PackageSet, parse_label
-from msvc import gen_msvc
+from .bzlfile import parse as parse_bzl
+from .package import PackageSet, parse_label
+from .msvc import gen_msvc
 
 import os
 def _find_workspace_dir(base):
