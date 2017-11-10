@@ -1,81 +1,69 @@
-import sys, argparse
-from .bzlfile import parse as parse_bzl
-from .package import PackageSet, parse_label
-from .msvc import gen_msvc
-
+import argparse
 import os
-def _find_workspace_dir(base):
-    cur = os.path.abspath(base)
-    while True:
-        if os.path.isfile(os.path.join(cur, 'WORKSPACE')):
-            return cur
-        cur, tail = os.path.split(cur)
-        if tail == '':
-            raise RuntimeError('failed to find WORKSPACE')
+import uuid
+import sys
 
-def _find_packages(wrk):
-    for top, dirnames, filenames in os.walk(wrk):
-        if 'BUILD' in filenames:
-            yield os.path.relpath(top, wrk)
-        dirnames[:] = [dir for dir in dirnames if not dir.startswith('.')]
-
-list_of_labels = {
-    'type': 'array',
-    'items': {
-        'type': 'label',
-        },
-    'default': (),
-    }
-
-list_of_strings = {
-    'type': 'array',
-    'items': {
-        'type': 'string',
-        },
-    'default': (),
-    }
-
-_schemas = {
-    'cc_library': {
-        'deps': list_of_labels,
-        'srcs': list_of_strings,
-        'hdrs': list_of_strings,
-        'includes': list_of_strings,
-        },
-    'cc_test': {
-        'deps': list_of_labels,
-        'srcs': list_of_strings,
-        'hdrs': list_of_strings,
-        'includes': list_of_strings,
-        },
-    }
+from . import msvc_ccproj
+from .fs import Fs
+from .label import parse_label
+from .msvc import gen_msvc
+from .package import PackageSet
+from .workspace import Workspace
 
 def _main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--workspace', '-w', default='.')
-    ap.add_argument('target', nargs='*')
+    ap.add_argument('--output', '-o', default='.')
+    ap.add_argument('targets', nargs='*', default=[])
     args = ap.parse_args()
 
-    wrk = _find_workspace_dir(args.workspace)
+    config = {}
+    labels = []
 
-    ps = PackageSet(wrk, _schemas)
+    for tgt in args.targets:
+        if '=' in tgt:
+            k, v = tgt.split('=', 1)
+            config[k] = v
+        else:
+            labels.append(tgt)
 
-    if not args.target:
-        targets = []
-        for label in _find_packages(wrk):
-            pkg = ps.load_pkg(label)
-            targets.extend(pkg.rules.values())
-    else:
-        targets = [ps.load_target(label) for label in args.target]
+    w = Workspace(args.workspace, config, fs=Fs(), http=None)
+    targets = set(w.resolve_target(lbl, '', '') for lbl in labels)
 
-    target_dir = os.path.join(wrk, '_build')
+    gen_projs = {}
 
-    try:
-        os.mkdir(target_dir)
-    except OSError:
-        pass
+    used_names = set()
 
-    gen_msvc(target_dir, targets)
+    seen = set(targets)
+    while targets:
+        tgt = targets.pop()
+
+        if isinstance(tgt, FileTarget):
+            tgt = tgt.rule
+
+        if isinstance(tgt, (CcBinary, CcLibrary, CcTest)):
+            name_base = tgt.package.name.replace('/', '_') + tgt.name
+            name = name_base
+
+            name_idx = 0
+            while name in used_names:
+                name_idx += 1
+                name = name_base + '_' + str(name_idx)
+
+            used_names.add(name)
+
+            gen_projs[tgt] = (os.path.join(args.output, name + '.vcxproj'), uuid.uuid4())
+            for dep in tgt.deps:
+                if dep not in seen:
+                    seen.add(dep)
+                    targets.add(dep)
+        else:
+            raise RuntimeError('XXX not implemented')
+
+    for tgt, (fname_root, uuid) in gen_projs:
+        with open(name + '.vcxproj', 'w') as fout:
+            fout.write(msvc_ccproj.make_vcxproj(p))
+
     return 0
 
 if __name__ == '__main__':
