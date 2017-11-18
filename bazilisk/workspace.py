@@ -239,12 +239,21 @@ def _bld_select(pkg, mapping):
 def _bld_config_setting(pkg, *, name, values, visibility):
     pkg.add_config_setting(name, values)
 
+def _bld_exports_files(pkg, *labels, visibility=None, licenses=None):
+    pass
+
+def _bld_rule(pkg, implementation, test=False, attrs=None, outputs=None, executable=False,
+        output_to_genfiles=False, fragments=[], host_fragments=[], toolchains=[], doc=''):
+    return _make_rule(implementation=implementation, attrs=attrs, outputs=outputs)
+
 _build_builtins = {
     'package': _bld_package,
     'licenses': _bld_licenses,
     'select': _bld_select,
 
     'config_setting': _bld_config_setting,
+
+    'exports_files': _bld_exports_files,
 
     'cc_library': _make_rule(
         implementation=None,
@@ -286,6 +295,8 @@ _build_builtins = {
 
 _bzl_builtins = {
     'select': _bld_select,
+    'rule': _bld_rule,
+    'attr': _Attr,
     }
 
 class Package:
@@ -437,10 +448,6 @@ class Workspace:
         with fin:
             mod = bzlfile.parse(fin)
 
-        ctx = _LoadCtx()
-        ctx.repo = cur_repo
-        ctx.pkg = cur_pkg
-
         def load(label):
             repo_name, pkg_name, target_name = parse_label(label)
             if pkg_name is None:
@@ -452,7 +459,7 @@ class Workspace:
 
             return pkg.get_bzl(target_name)
 
-        return bzlfile.evaluate(mod, self._make_builtins(), ctx, load)
+        return bzlfile.evaluate(mod, self._make_builtins(), None, load)
 
     def _make_builtins(self):
         def local_repository(ctx, name, path):

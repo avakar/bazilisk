@@ -122,5 +122,22 @@ class _Evaluator(ast.NodeVisitor):
     def visit_Num(self, e):
         return e.n
 
+    def visit_FunctionDef(self, stmt):
+        args = stmt.args
+        body = stmt.body
+        def user_fn(pkg, *args, **kw):
+            pass
+
+        self._globals[stmt.name] = user_fn
+
+    def visit_NameConstant(self, e):
+        return e.value
+
+    def visit_Attribute(self, e):
+        if not isinstance(e.ctx, ast.Load):
+            raise RuntimeError('only reads from structures')
+        lhs = self.visit(e.value)
+        return getattr(lhs, e.attr)
+
     def generic_visit(self, node):
         raise RuntimeError('Unknown expression')
